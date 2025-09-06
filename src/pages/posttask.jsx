@@ -1,27 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { initializeApp } from "firebase/app";
-import {
-  getAuth,
-  signInAnonymously,
-  onAuthStateChanged,
-} from "firebase/auth";
-import { getFirestore, collection, addDoc } from "firebase/firestore";
-
-// ---------------- 🔥 Firebase Config ----------------
-// ⬇️ Replace with your config if you create another project
-const firebaseConfig = {
-  apiKey: "AIzaSyAAa1lNKQPgt6f0dd6TZ4VtgOiLYb7ukzE",
-  authDomain: "skillbridge-81d5e.firebaseapp.com",
-  projectId: "skillbridge-81d5e",
-  storageBucket: "skillbridge-81d5e.firebasestorage.app",
-  messagingSenderId: "854363859288",
-  appId: "1:854363859288:web:c04fb725eebb0b52f35d2d",
-  measurementId: "G-E78EQCCY5R"
-};
-
-// ---------------- 🔥 Firestore Path ----------------
-// ⬇️ Change this if you want another app namespace
-const appId = "skillbridge-app"; // <-- your appId
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 const PostTask = () => {
   // State to manage form data
@@ -39,10 +18,7 @@ const PostTask = () => {
   const [isPreview, setIsPreview] = useState(false);
   const [message, setMessage] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
-  const [db, setDb] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [userId, setUserId] = useState(null);
-
+  const [user, setUser] = useState(null); // State to store the authenticated user
 
   // All available skills
   const allSkills = [
@@ -52,34 +28,13 @@ const PostTask = () => {
     "React", "Node.js", "Python", "Java", "C++", "JavaScript",
   ];
 
-  // Initialize Firebase + Auth
+  // Set up auth state listener
   useEffect(() => {
-    const setupFirebase = async () => {
-      try {
-        const app = initializeApp(firebaseConfig);
-        const firebaseAuth = getAuth(app);
-        const firestoreDb = getFirestore(app);
-
-        await signInAnonymously(firebaseAuth);
-
-        const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-          if (user) {
-            setUserId(user.uid);
-          } else {
-            setUserId(null);
-          }
-          setIsAuthReady(true);
-        });
-
-        setDb(firestoreDb);
-        return () => unsubscribe();
-      } catch (error) {
-        console.error("Firebase setup failed:", error);
-        setMessage("Error: Firebase setup failed. Please try again later.");
-      }
-    };
-
-    setupFirebase();
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (authUser) => {
+      setUser(authUser);
+    });
+    return () => unsubscribe();
   }, []);
 
   // Handle input change
@@ -105,8 +60,8 @@ const PostTask = () => {
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
 
-    if (!isAuthReady || !db) {
-      setMessage("Please wait, the app is still loading...");
+    if (!user) {
+      setMessage("You must be logged in to post a task.");
       return;
     }
 
@@ -119,15 +74,13 @@ const PostTask = () => {
     setMessage("Publishing task...");
 
     try {
-      const tasksCollectionRef = collection(
-        db,
-        `/artifacts/${appId}/public/data/tasks`
-      );
+      const db = getFirestore();
+      const tasksCollectionRef = collection(db, `artifacts/skillbridge-app/public/data/tasks`);
 
       await addDoc(tasksCollectionRef, {
         ...formData,
-        postedByUserId: userId,
-        timestamp: Date.now(),
+        postedByUserId: user.uid,
+        timestamp: serverTimestamp(),
       });
 
       setMessage("Task published successfully!");
@@ -152,7 +105,7 @@ const PostTask = () => {
 
   // Form UI
   const FormView = (
-    <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-2xl w-full mx-auto my-12">
+    <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-2xl w-full mx-auto my-12 backdrop-blur-md bg-opacity-80">
       <h2 className="text-4xl font-extrabold mb-6 text-center text-gray-800">Post a New Task</h2>
       {message && (
         <div
@@ -259,9 +212,9 @@ const PostTask = () => {
           </button>
           <button
             type="submit"
-            disabled={!isAuthReady || isPublishing}
+            disabled={!user || isPublishing}
             className={`w-full py-3 px-6 rounded-lg text-lg font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-              isPublishing || !isAuthReady ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+              isPublishing || !user ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
             {isPublishing ? "Publishing..." : "Publish"}
@@ -273,7 +226,7 @@ const PostTask = () => {
 
   // Preview UI
   const PreviewView = (
-    <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-2xl w-full mx-auto my-12">
+    <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-2xl w-full mx-auto my-12 backdrop-blur-md bg-opacity-80">
       <h2 className="text-3xl font-bold mb-4 text-center">Task Preview</h2>
       <div className="space-y-4 text-gray-800">
         <p><strong>Title:</strong> <span className="text-blue-600 font-semibold">{formData.taskTitle}</span></p>
@@ -296,9 +249,9 @@ const PostTask = () => {
         </button>
         <button
           onClick={handleSubmit}
-          disabled={!isAuthReady || isPublishing}
+          disabled={!user || isPublishing}
           className={`w-full py-3 px-6 rounded-lg text-lg font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-            isPublishing || !isAuthReady ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+            isPublishing || !user ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
           {isPublishing ? "Publishing..." : "Publish Task"}

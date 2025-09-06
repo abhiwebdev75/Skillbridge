@@ -1,220 +1,267 @@
 import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, onSnapshot } from 'firebase/firestore';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, query, where } from 'firebase/firestore';
 
+const Explore = () => {
+    const [tasks, setTasks] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [user, setUser] = useState(null);
+    const [userRole, setUserRole] = useState(null); // 'student' or 'recruiter'
+    const [selectedSkills, setSelectedSkills] = useState([]);
+    const [selectedDifficulty, setSelectedDifficulty] = useState('');
 
-// Main component to explore tasks
-const ExploreTasks = () => {
-  // State to store the list of tasks fetched from Firestore
-  const [tasks, setTasks] = useState([]);
-  // State to store the filtered list of tasks
-  const [filteredTasks, setFilteredTasks] = useState([]);
-  // State for search query
-  const [searchQuery, setSearchQuery] = useState('');
-  // State for selected difficulty filter
-  const [difficultyFilter, setDifficultyFilter] = useState('');
-  
-  // States for loading and error messages
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  
-  // States for Firebase
-  const [db, setDb] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [userId, setUserId] = useState(null);
+    const allSkills = [
+        "AI", "Machine Learning", "Web Development", "Mobile Development",
+        "Cybersecurity", "Data Science", "DevOps", "Cloud Computing",
+        "Blockchain", "IoT", "Game Development", "UI/UX Design",
+        "React", "Node.js", "Python", "Java", "C++", "JavaScript",
+    ];
 
-  // Initialize Firebase and authenticate the user
-  useEffect(() => {
-    const setupFirebase = async () => {
-      try {
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const firestoreDb = getFirestore(app);
-        const firebaseAuth = getAuth(app);
+    const allDifficulties = ["Beginner", "Intermediate", "Advanced"];
 
-        // Sign in the user with the provided custom token or anonymously
-        if (typeof __initial_auth_token !== 'undefined') {
-          await signInWithCustomToken(firebaseAuth, __initial_auth_token);
-        } else {
-          await signInAnonymously(firebaseAuth);
+    // Get auth instance and set up user listener
+    useEffect(() => {
+        const auth = getAuth();
+        const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
+            if (currentUser) {
+                setUser(currentUser);
+                // In a real application, you would fetch the user's role from a database
+                // For this example, we'll hardcode a role for demonstration purposes.
+                // You can change this to 'recruiter' to see the other dashboard.
+                setUserRole('student');
+            } else {
+                setUser(null);
+                setUserRole(null);
+            }
+        });
+        return () => unsubscribeAuth();
+    }, []);
+
+    // Fetch tasks from Firestore when user is authenticated or filters change
+    useEffect(() => {
+        if (!user || !userRole) {
+            setLoading(false);
+            return;
         }
 
-        // Listen for auth state changes to get the user's ID
-        const unsubscribeAuth = onAuthStateChanged(firebaseAuth, (user) => {
-          if (user) {
-            setUserId(user.uid);
-            setIsAuthReady(true);
-          } else {
-            setUserId(null);
-            setIsAuthReady(true);
-          }
-        });
+        const db = getFirestore();
+        const tasksCollectionRef = collection(db, 'artifacts/skillbridge-app/public/data/tasks');
+        
+        // Build the query based on filters and user role
+        let tasksQuery;
 
-        setDb(firestoreDb);
-        return () => unsubscribeAuth();
-      } catch (error) {
-        console.error("Firebase setup failed:", error);
-        setError("Error: Firebase setup failed. Please try again later.");
-        setIsLoading(false);
-      }
+        if (userRole === 'recruiter') {
+            // Recruiter sees only their own tasks
+            tasksQuery = query(tasksCollectionRef, where('postedByUserId', '==', user.uid));
+        } else {
+            // Student sees all tasks
+            tasksQuery = query(tasksCollectionRef);
+
+            if (selectedSkills.length > 0) {
+                tasksQuery = query(tasksQuery, where('selectedSkills', 'array-contains-any', selectedSkills));
+            }
+    
+            if (selectedDifficulty) {
+                tasksQuery = query(tasksQuery, where('difficulty', '==', selectedDifficulty));
+            }
+        }
+       
+        // Set up real-time listener
+        const unsubscribeFirestore = onSnapshot(tasksQuery,
+            (snapshot) => {
+                const fetchedTasks = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                setTasks(fetchedTasks);
+                setLoading(false);
+            },
+            (err) => {
+                setError("Error fetching tasks: " + err.message);
+                console.error(err);
+                setLoading(false);
+            }
+        );
+
+        // Clean up the listener on unmount
+        return () => unsubscribeFirestore();
+    }, [user, userRole, selectedSkills, selectedDifficulty]);
+
+    const handleSkillToggle = (skill) => {
+        setSelectedSkills((prevSkills) =>
+            prevSkills.includes(skill)
+                ? prevSkills.filter((s) => s !== skill)
+                : [...prevSkills, skill]
+        );
     };
-    setupFirebase();
-  }, []);
 
-  // Fetch tasks from Firestore in real-time
-  useEffect(() => {
-    if (!isAuthReady || !db) return;
+    const handleDifficultyChange = (e) => {
+        setSelectedDifficulty(e.target.value);
+    };
 
-    try {
-      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-      const tasksCollectionRef = collection(db, `/artifacts/${appId}/public/data/tasks`);
-
-      // Set up a real-time listener with onSnapshot
-      const unsubscribe = onSnapshot(tasksCollectionRef, (querySnapshot) => {
-        const fetchedTasks = [];
-        querySnapshot.forEach((doc) => {
-          fetchedTasks.push({ id: doc.id, ...doc.data() });
-        });
-        setTasks(fetchedTasks);
-        setIsLoading(false);
-      }, (error) => {
-        console.error("Error fetching tasks:", error);
-        setError("Failed to load tasks. Please try again.");
-        setIsLoading(false);
-      });
-
-      return () => unsubscribe();
-    } catch (err) {
-      console.error("Error setting up Firestore listener:", err);
-      setError("Failed to set up real-time updates.");
-      setIsLoading(false);
-    }
-  }, [db, isAuthReady]);
-
-  // Filter tasks whenever the search query, difficulty filter, or tasks list changes
-  useEffect(() => {
-    let newFilteredTasks = tasks;
-
-    // Apply search filter
-    if (searchQuery) {
-      const lowercasedQuery = searchQuery.toLowerCase();
-      newFilteredTasks = newFilteredTasks.filter(task => 
-        task.taskTitle.toLowerCase().includes(lowercasedQuery) ||
-        task.description.toLowerCase().includes(lowercasedQuery) ||
-        task.selectedSkills.some(skill => skill.toLowerCase().includes(lowercasedQuery))
-      );
-    }
-
-    // Apply difficulty filter
-    if (difficultyFilter) {
-      newFilteredTasks = newFilteredTasks.filter(task => 
-        task.difficulty === difficultyFilter
-      );
-    }
-
-    setFilteredTasks(newFilteredTasks);
-  }, [searchQuery, difficultyFilter, tasks]);
-
-  // Handle loading and error states
-  if (isLoading) {
-    return (
-      <div className="relative min-h-screen flex items-center justify-center p-4 font-inter bg-slate-100 text-center">
-        <p className="text-gray-600 text-lg">Loading tasks...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="relative min-h-screen flex items-center justify-center p-4 font-inter bg-slate-100 text-center">
-        <p className="text-red-500 text-lg">{error}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative min-h-screen flex flex-col items-center p-4 z-10 font-inter bg-slate-100">
-      <div className="w-full max-w-4xl p-8 rounded-2xl">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-extrabold text-gray-900">Explore Tasks</h1>
-          <p className="text-gray-600 mt-2">Discover real-world projects posted by the community.</p>
-        </div>
-
-        {userId && (
-          <div className="bg-blue-100 text-blue-800 p-4 rounded-xl mb-6 text-sm text-center">
-            Your User ID: <span className="font-mono break-all">{userId}</span>
-          </div>
-        )}
-
-        {/* Search and Filter Controls */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          {/* Search Bar */}
-          <input
-            type="text"
-            placeholder="Search tasks by title, description, or skills..."
-            className="flex-grow px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {/* Difficulty Filter */}
-          <select
-            className="px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 bg-white"
-            value={difficultyFilter}
-            onChange={(e) => setDifficultyFilter(e.target.value)}
-          >
-            <option value="">All Difficulties</option>
-            <option value="Beginner">Beginner</option>
-            <option value="Intermediate">Intermediate</option>
-            <option value="Advanced">Advanced</option>
-          </select>
-        </div>
-
-        {/* Display Tasks */}
-        {filteredTasks.length === 0 ? (
-          <div className="text-center p-12 bg-white rounded-2xl shadow-xl">
-            <p className="text-gray-500 text-xl font-medium">No tasks found. Try a different search or filter.</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {filteredTasks.map((task) => (
-              <div key={task.id} className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">{task.taskTitle}</h2>
-                <p className="text-gray-600 mb-4 whitespace-pre-wrap">{task.description}</p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {task.selectedSkills.map((skill) => (
-                    <span key={skill} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-medium">
-                      {skill}
-                    </span>
-                  ))}
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen pt-24">
+                <div className="flex flex-col items-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="mt-4 text-gray-500">Loading tasks...</p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700">
-                  <div className="flex items-center">
-                    <span className="font-semibold mr-2">Difficulty:</span>
-                    <span className="text-gray-600">{task.difficulty}</span>
-                  </div>
-                  <div className="flex items-center">
-                    <span className="font-semibold mr-2">Deadline:</span>
-                    <span className="text-gray-600">{task.deadline}</span>
-                  </div>
-                  <div className="flex items-center sm:col-span-2">
-                    <span className="font-semibold mr-2">Posted by:</span>
-                    <span className="text-gray-600">{task.yourName}</span>
-                  </div>
-                  <div className="flex items-center sm:col-span-2">
-                    <span className="font-semibold mr-2">Expected Outcome:</span>
-                    <a href={task.expectedOutcome} className="text-blue-500 hover:underline break-all" target="_blank" rel="noopener noreferrer">
-                      {task.expectedOutcome}
-                    </a>
-                  </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center min-h-screen pt-24 text-red-500">
+                <p>{error}</p>
+            </div>
+        );
+    }
+    
+    // --- Student Dashboard UI ---
+    const StudentDashboard = () => (
+        <>
+            <h1 className="text-4xl font-extrabold text-center text-gray-900 mb-8">
+                Explore Tasks
+            </h1>
+            <p className="text-center text-lg text-gray-600 mb-12">
+                Find and apply to real-world tasks posted by professionals.
+            </p>
+
+            {/* Filter Section */}
+            <div className="mb-12 p-6 bg-white rounded-xl shadow-lg">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">Filters</h3>
+                <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-8">
+                    {/* Skills Filter */}
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Skills:</label>
+                        <div className="flex flex-wrap gap-2">
+                            {allSkills.map(skill => (
+                                <button
+                                    key={skill}
+                                    onClick={() => handleSkillToggle(skill)}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        selectedSkills.includes(skill)
+                                            ? "bg-blue-600 text-white shadow-md"
+                                            : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                                    }`}
+                                >
+                                    {skill}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Difficulty Filter */}
+                    <div className="md:w-1/4">
+                        <label htmlFor="difficulty-filter" className="block text-sm font-medium text-gray-700 mb-2">Filter by Difficulty:</label>
+                        <select
+                            id="difficulty-filter"
+                            value={selectedDifficulty}
+                            onChange={handleDifficultyChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">All Difficulties</option>
+                            {allDifficulties.map(difficulty => (
+                                <option key={difficulty} value={difficulty}>{difficulty}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+            </div>
+             {tasks.length === 0 ? (
+                <div className="text-center text-gray-500 text-lg">
+                    No tasks available.
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {tasks.map(task => (
+                        <div key={task.id} className="bg-white rounded-xl shadow-lg p-6 flex flex-col justify-between transition-transform duration-300 hover:scale-105 hover:shadow-2xl">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-800 mb-2">{task.taskTitle}</h2>
+                                <p className="text-gray-500 text-sm mb-4">Posted by: {task.yourName}</p>
+                                <p className="text-gray-600 mb-4">{task.description}</p>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {task.selectedSkills && task.selectedSkills.map(skill => (
+                                        <span key={skill} className="bg-blue-200 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">{skill}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex justify-between items-center text-sm text-gray-500 mb-2">
+                                    <span>Difficulty: <span className="font-semibold text-gray-700">{task.difficulty}</span></span>
+                                    <span>Deadline: <span className="font-semibold text-gray-700">{task.deadline}</span></span>
+                                </div>
+                                <button className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg mt-4 hover:bg-blue-700 transition-colors">
+                                    Apply for this Task
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </>
+    );
+
+    // --- Recruiter Dashboard UI ---
+    const RecruiterDashboard = () => (
+        <>
+            <h1 className="text-4xl font-extrabold text-center text-gray-900 mb-8">
+                Your Posted Tasks
+            </h1>
+            <p className="text-center text-lg text-gray-600 mb-12">
+                Manage the tasks you have posted for students to work on.
+            </p>
+            {tasks.length === 0 ? (
+                <div className="text-center text-gray-500 text-lg">
+                    You have not posted any tasks yet.
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {tasks.map(task => (
+                        <div key={task.id} className="bg-white rounded-xl shadow-lg p-6 flex flex-col justify-between transition-transform duration-300 hover:scale-105 hover:shadow-2xl">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-800 mb-2">{task.taskTitle}</h2>
+                                <p className="text-gray-500 text-sm mb-4">Posted by: {task.yourName}</p>
+                                <p className="text-gray-600 mb-4">{task.description}</p>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {task.selectedSkills && task.selectedSkills.map(skill => (
+                                        <span key={skill} className="bg-blue-200 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">{skill}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex justify-between items-center text-sm text-gray-500 mb-2">
+                                    <span>Difficulty: <span className="font-semibold text-gray-700">{task.difficulty}</span></span>
+                                    <span>Deadline: <span className="font-semibold text-gray-700">{task.deadline}</span></span>
+                                </div>
+                                <div className="flex space-x-2 mt-4">
+                                    <button className="flex-1 bg-green-600 text-white font-semibold py-2 rounded-lg hover:bg-green-700 transition-colors">
+                                        View Applicants
+                                    </button>
+                                    <button className="flex-1 bg-red-600 text-white font-semibold py-2 rounded-lg hover:bg-red-700 transition-colors">
+                                        Delete Task
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </>
+    );
+
+    return (
+        <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8 pt-24 md:pt-32">
+            <div className="max-w-7xl mx-auto">
+                {userRole === 'recruiter' ? <RecruiterDashboard /> : <StudentDashboard />}
+            </div>
+        </div>
+    );
 };
 
-export default ExploreTasks;
+export default Explore;

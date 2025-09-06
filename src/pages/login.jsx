@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged, sendPasswordResetEmail, getIdToken } from "firebase/auth";
 import { initializeApp } from "firebase/app";
 
+// Your Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAAa1lNKQPgt6f0dd6TZ4VtgOiLYb7ukzE",
   authDomain: "skillbridge-81d5e.firebaseapp.com",
@@ -13,7 +14,8 @@ const firebaseConfig = {
   measurementId: "G-E78EQCCY5R"
 };
 
-// Initialize Firebase app and authentication
+// Initialize Firebase app and authentication outside of the component
+// to ensure it's done only once.
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
@@ -33,12 +35,32 @@ const Login = () => {
   // Create a Google Auth provider instance
   const googleProvider = new GoogleAuthProvider();
 
+  // A new state to manage the authentication loading status
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // State for password reset modal
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+
+  // onAuthStateChanged listener to track authentication state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // Redirect to  on successful login only if not loading
+        navigate('/');
+      }
+      setAuthLoading(false); // Set authLoading to false once the check is complete
+    });
+
+    // Clean up the listener on component unmount
+    return () => unsubscribe();
+  }, [auth, navigate]);
+
   // Initialize RecaptchaVerifier only when switching to phone tab and container exists
   useEffect(() => {
-    if (activeTab === 'phone') {
-      // Delay RecaptchaVerifier initialization until after DOM update
+    if (activeTab === 'phone' && !window.recaptchaVerifier) {
       setTimeout(() => {
-        if (!window.recaptchaVerifier && document.getElementById('recaptcha-container')) {
+        if (document.getElementById('recaptcha-container')) {
           window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
             'size': 'invisible'
           });
@@ -55,6 +77,32 @@ const Login = () => {
     };
   }, [activeTab, auth]);
 
+  // Example function to upload data to backend after login
+  const uploadDataExample = async (userData) => {
+    try {
+      // Get the ID token for the authenticated user
+      const idToken = await userData.getIdToken(true); 
+
+      // Send the token in the Authorization header
+      const response = await fetch('http://your-backend-url.com/api/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ title: 'New task from React', description: 'This is a test task.' })
+      });
+
+      if (response.ok) {
+        console.log("Data uploaded to Firestore successfully.");
+      } else {
+        console.error("Failed to upload data:", await response.text());
+      }
+    } catch (err) {
+      console.error("Error getting ID token or uploading data:", err);
+    }
+  };
+
   // Handle email/password login
   const handleEmailLogin = async (e) => {
     e.preventDefault();
@@ -62,8 +110,10 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate('/explore'); // Redirect to explore page on success
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      // userCredential.user contains the user object
+      await uploadDataExample(userCredential.user); // Example: Upload data right after login
+      navigate('/');
     } catch (err) {
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
         setError('Invalid email or password.');
@@ -81,8 +131,9 @@ const Login = () => {
     setError('');
     setIsLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
-      navigate('/explore'); // Redirect to explore page on success
+      const userCredential = await signInWithPopup(auth, googleProvider);
+      await uploadDataExample(userCredential.user); // Example: Upload data right after login
+      navigate('/');
     } catch (err) {
       setError('Failed to log in with Google. Please try again.');
       console.error("Google Login Error:", err.message);
@@ -109,18 +160,58 @@ const Login = () => {
   };
 
   // Handle phone number login (step 2: verify code)
-  const verifyCode = async () => {
+  const verifyCode = async (e) => {
+    e.preventDefault();
     setError('');
     setIsLoading(true);
     try {
-      await confirmationResult.confirm(verificationCode);
-      navigate('/explore');
+      const userCredential = await confirmationResult.confirm(verificationCode);
+      await uploadDataExample(userCredential.user); // Example: Upload data right after login
+      navigate('/');
     } catch (err) {
       setIsLoading(false);
       setError('Invalid verification code. Please try again.');
       console.error("Code Verification Error:", err.message);
     }
   };
+
+  const handlePasswordReset = async () => {
+    setError('');
+    if (!email) {
+      setError('Please enter your email to reset the password.');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetEmailSent(true);
+      setError('A password reset email has been sent. Please check your inbox.');
+    } catch (err) {
+      if (err.code === 'auth/user-not-found') {
+        setError('The email address is not registered.');
+      } else {
+        setError('Failed to send password reset email. Please try again.');
+        console.error("Password Reset Error:", err.message);
+      }
+    } finally {
+      setIsLoading(false);
+      setShowPasswordResetModal(false); // Close the modal after sending the email
+    }
+  };
+
+  // Render a loading state while Firebase checks auth status
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-gray-500">
+        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen flex items-center justify-center p-4 z-10 pt-24 md:pt-32">
@@ -129,7 +220,7 @@ const Login = () => {
           <h2 className="text-3xl font-bold text-gray-900">Welcome Back</h2>
           <p className="mt-2 text-gray-600">Login to your account</p>
         </div>
-        
+
         {/* Tab Buttons */}
         <div className="flex justify-center mb-6">
           <button
@@ -183,7 +274,7 @@ const Login = () => {
             </div>
             {error && <div className="text-red-500 text-sm">{error}</div>}
             <div className="flex justify-between items-center text-sm">
-              <a href="#" className="text-blue-500 hover:underline">Forgot Password?</a>
+              <a href="#" onClick={() => setShowPasswordResetModal(true)} className="text-blue-500 hover:underline">Forgot Password?</a>
             </div>
             <button
               type="submit"
@@ -194,7 +285,7 @@ const Login = () => {
             </button>
           </form>
         )}
-        
+
         {/* Phone Number form */}
         {activeTab === 'phone' && (
           <div className="space-y-4">
@@ -272,6 +363,57 @@ const Login = () => {
           Don't have an account? <Link to="/signup" className="text-blue-500 hover:underline">Sign up here</Link>
         </p>
       </div>
+
+      {/* Password Reset Modal */}
+      {showPasswordResetModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
+          <div className="relative p-8 bg-white rounded-xl shadow-xl max-w-sm w-full">
+            <h3 className="text-lg font-bold mb-4">Reset Password</h3>
+            <p className="text-gray-600 text-sm mb-4">Enter your email address to receive a password reset link.</p>
+            <input
+              className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
+            <div className="flex justify-end space-x-2 mt-4">
+              <button
+                onClick={() => setShowPasswordResetModal(false)}
+                className="px-4 py-2 text-sm font-semibold rounded-xl bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePasswordReset}
+                className="px-4 py-2 text-sm font-semibold rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                disabled={isLoading}
+              >
+                {isLoading ? "Sending..." : "Send Reset Email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success message modal */}
+      {resetEmailSent && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
+          <div className="relative p-8 bg-white rounded-xl shadow-xl max-w-sm w-full">
+            <h3 className="text-lg font-bold mb-4">Success!</h3>
+            <p className="text-gray-600 text-sm mb-4">A password reset email has been sent to your email address.</p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setResetEmailSent(false)}
+                className="px-4 py-2 text-sm font-semibold rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
