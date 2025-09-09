@@ -1,0 +1,11 @@
+const firebaseConfig = {
+  apiKey: "AIzaSyAAa1lNKQPgt6f0dd6TZ4VtgOiLYb7ukzE",
+  authDomain: "skillbridge-81d5e.firebaseapp.com",
+  projectId: "skillbridge-81d5e",
+  storageBucket: "skillbridge-81d5e.firebasestorage.app",
+  messagingSenderId: "854363859288",
+  appId: "1:854363859288:web:c04fb725eebb0b52f35d2d",
+  measurementId: "G-E78EQCCY5R"
+};
+
+export default firebaseConfig;
