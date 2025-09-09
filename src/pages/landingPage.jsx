@@ -1,19 +1,68 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Header from "../components/header";
 import Footer from "../components/footer";
+import { getFirestore, collection, getDocs } from "firebase/firestore";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { Link } from "react-router-dom";
 
 // A wrapper component that provides the consistent background and layout.
 const LandingPage = () => {
+  const [user, setUser] = useState(null);
+  const [loginTime, setLoginTime] = useState(null);
+
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        setLoginTime(new Date());
+      } else {
+        setUser(null);
+        setLoginTime(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const LoginMessage = () => {
+    if (user) {
+      const currentHour = new Date().getHours();
+      let greeting;
+      if (currentHour < 12) {
+        greeting = 'Good morning';
+      } else if (currentHour < 18) {
+        greeting = 'Good afternoon';
+      } else {
+        greeting = 'Good evening';
+      }
+      return (
+        <div className="text-center text-lg text-white mb-8">
+          <h3 className="text-3xl font-extrabold">{greeting}, {user.displayName || 'User'}!</h3>
+          {loginTime && (
+            <div className="flex items-center justify-center mt-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-white" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+              </svg>
+              <p>Logged in at: {loginTime.toLocaleTimeString()}</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+  
   return (
-    // The main container now has a dark background color class applied directly.
     <div className="relative min-h-screen flex flex-col font-inter">
-      {/* The Header component for navigation */}
-      {/* The content of the landing page */}
       <Content />
-      {/* The Footer component */}
-      <StatsSection />
+      <LoginMessage />
+      <TrustedBySection />
+      {user ? (
+        <StatsSection />
+      ) : (
+        <CallToActionSection />
+      )}
       <WhyChooseSection />
-      <CallToActionSection />
       <AccordionSection />
     </div>
   );
@@ -37,13 +86,17 @@ const Content = () => (
         into practical expertise.
       </p>
       <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-        <button className="px-8 py-3 rounded-full text-white font-semibold transition-transform duration-300 transform hover:scale-105 bg-gradient-to-r from-teal-500 to-blue-500 shadow-md">
-          Explore Tasks
-          <span className="ml-2">&rarr;</span>
-        </button>
-        <button className="px-8 py-3 rounded-full text-gray-700 font-semibold border-2 border-gray-300 transition-colors duration-300 hover:bg-gray-100">
-          Post a Task
-        </button>
+        <Link to="/explore">
+          <button className="px-8 py-3 rounded-full text-white font-semibold transition-transform duration-300 transform hover:scale-105 bg-gradient-to-r from-teal-500 to-blue-500 shadow-md">
+            Explore Tasks
+            <span className="ml-2">&rarr;</span>
+          </button>
+        </Link>
+        <Link to="/post-task">
+          <button className="px-8 py-3 rounded-full text-gray-700 font-semibold border-2 border-gray-300 transition-colors duration-300 hover:bg-gray-100">
+            Post a Task
+          </button>
+        </Link>
       </div>
     </div>
 
@@ -88,8 +141,90 @@ const Content = () => (
   </main>
 );
 
+const TrustedBySection = () => {
+    const companies = [
+      'TCS', 'Infosys', 'Wipro', 'HCLTech', 'Tech Mahindra', 'Larsen & Toubro',
+      'Cognizant', 'Mindtree', 'Capgemini', 'Coforge', 'Mphasis', 'Persistent Systems'
+    ];
+    
+    return (
+      <section className="bg-gray-900 py-16">
+        <style>
+          {`
+            @keyframes scroll {
+              0% {
+                transform: translateX(0);
+              }
+              100% {
+                transform: translateX(calc(-200px * 6));
+              }
+            }
+            @keyframes glow {
+              0%, 100% { text-shadow: 0 0 5px rgba(255, 255, 255, 0.5), 0 0 10px rgba(255, 255, 255, 0.5), 0 0 15px rgba(255, 255, 255, 0.5); }
+              50% { text-shadow: 0 0 20px rgba(255, 255, 255, 0.8), 0 0 30px rgba(255, 255, 255, 0.8), 0 0 40px rgba(255, 255, 255, 0.8); }
+            }
+            .scroll-container {
+              animation: scroll 30s linear infinite;
+            }
+            .glowing-text {
+              color: white;
+              animation: glow 1.5s infinite alternate;
+            }
+          `}
+        </style>
+        <div className="text-center mb-12">
+          <h2 className="text-4xl font-bold text-white mb-2">Trusted by Top IT Companies</h2>
+        </div>
+        <div className="overflow-hidden whitespace-nowrap [mask-image:_linear-gradient(to_right,transparent_0,_black_128px,_black_calc(100%-128px),transparent_100%)]">
+          <div className="inline-block animate-scroll space-x-12 scroll-container">
+            {[...companies, ...companies].map((company, index) => (
+              <span key={index} className="inline-block mx-6 my-2 text-2xl font-semibold glowing-text">
+                {company}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  };
+  
 
 const StatsSection = () => {
+  const [statsData, setStatsData] = useState({ totalStudents: 0, totalRecruiters: 0, totalTasks: 0 });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const db = getFirestore();
+        const usersCollection = collection(db, 'artifacts/skillbridge-app/public/data/users');
+        const tasksCollection = collection(db, 'artifacts/skillbridge-app/public/data/tasks');
+
+        const usersSnapshot = await getDocs(usersCollection);
+        const tasksSnapshot = await getDocs(tasksCollection);
+
+        let totalStudents = 0;
+        let totalRecruiters = 0;
+
+        usersSnapshot.forEach(doc => {
+          if (doc.data().role === 'student') {
+            totalStudents++;
+          } else if (doc.data().role === 'recruiter') {
+            totalRecruiters++;
+          }
+        });
+
+        setStatsData({
+          totalStudents: totalStudents,
+          totalRecruiters: totalRecruiters,
+          totalTasks: tasksSnapshot.size,
+        });
+      } catch (err) {
+        console.error("Error fetching stats:", err);
+      }
+    };
+    fetchStats();
+  }, []);
+
   const stats = [
     {
       icon: (
@@ -99,7 +234,7 @@ const StatsSection = () => {
         </svg>
       ),
       iconColor: "text-blue-500",
-      value: "9",
+      value: statsData.totalTasks,
       label: "Active Tasks",
     },
     {
@@ -111,8 +246,8 @@ const StatsSection = () => {
         </svg>
       ),
       iconColor: "text-purple-500",
-      value: "0",
-      label: "Student Submissions",
+      value: statsData.totalStudents,
+      label: "Total Students",
     },
     {
       icon: (
@@ -122,8 +257,8 @@ const StatsSection = () => {
         </svg>
       ),
       iconColor: "text-green-500",
-      value: "15+",
-      label: "Skill Categories",
+      value: statsData.totalRecruiters,
+      label: "Total Recruiters",
     },
     {
       icon: (

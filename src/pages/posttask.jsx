@@ -1,26 +1,24 @@
 import React, { useState, useEffect } from "react";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
 
 const PostTask = () => {
-  // State to manage form data
   const [formData, setFormData] = useState({
-    yourName: "",
-    email: "",
     taskTitle: "",
     description: "",
     selectedSkills: [],
     deadline: "",
     difficulty: "",
     expectedOutcome: "",
+    yourName: "",
+    email: "",
   });
 
   const [isPreview, setIsPreview] = useState(false);
   const [message, setMessage] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
-  const [user, setUser] = useState(null); // State to store the authenticated user
+  const [user, setUser] = useState(null);
 
-  // All available skills
   const allSkills = [
     "AI", "Machine Learning", "Web Development", "Mobile Development",
     "Cybersecurity", "Data Science", "DevOps", "Cloud Computing",
@@ -28,22 +26,39 @@ const PostTask = () => {
     "React", "Node.js", "Python", "Java", "C++", "JavaScript",
   ];
 
-  // Set up auth state listener
   useEffect(() => {
     const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (authUser) => {
+    const db = getFirestore();
+    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       setUser(authUser);
+      if (authUser) {
+        const userDocRef = doc(db, 'artifacts/skillbridge-app/public/data/users', authUser.uid);
+        try {
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setFormData(prevData => ({
+              ...prevData,
+              yourName: userData.name || '',
+              email: userData.email || '',
+            }));
+          } else {
+            setMessage("User data not found. Please check your Firestore.");
+          }
+        } catch (error) {
+          console.error("Error fetching user document: ", error);
+          setMessage("Failed to fetch user data.");
+        }
+      }
     });
     return () => unsubscribe();
   }, []);
 
-  // Handle input change
   const handleInputChange = (e) => {
-    const { id, value } = e.target;
-    setFormData((prevData) => ({ ...prevData, [id]: value }));
+    const { name, value } = e.target;
+    setFormData((prevData) => ({ ...prevData, [name]: value }));
   };
 
-  // Handle skill selection
   const handleSkillChange = (skill) => {
     setFormData((prevData) => {
       const { selectedSkills } = prevData;
@@ -56,15 +71,12 @@ const PostTask = () => {
     });
   };
 
-  // Submit task
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-
     if (!user) {
       setMessage("You must be logged in to post a task.");
       return;
     }
-
     if (formData.selectedSkills.length === 0) {
       setMessage("Please select at least one skill tag.");
       return;
@@ -76,13 +88,11 @@ const PostTask = () => {
     try {
       const db = getFirestore();
       const tasksCollectionRef = collection(db, `artifacts/skillbridge-app/public/data/tasks`);
-
       await addDoc(tasksCollectionRef, {
         ...formData,
         postedByUserId: user.uid,
         timestamp: serverTimestamp(),
       });
-
       setMessage("Task published successfully!");
       setFormData({
         yourName: "",
@@ -103,7 +113,6 @@ const PostTask = () => {
     }
   };
 
-  // Form UI
   const FormView = (
     <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-2xl w-full mx-auto my-12 backdrop-blur-md bg-opacity-80">
       <h2 className="text-4xl font-extrabold mb-6 text-center text-gray-800">Post a New Task</h2>
@@ -120,25 +129,23 @@ const PostTask = () => {
       )}
       <form className="space-y-6" onSubmit={handleSubmit}>
         <input
-          id="yourName"
+          name="yourName"
           type="text"
           value={formData.yourName}
-          onChange={handleInputChange}
           placeholder="Your Name"
-          required
-          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          readOnly
+          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors bg-gray-100"
         />
         <input
-          id="email"
+          name="email"
           type="email"
           value={formData.email}
-          onChange={handleInputChange}
           placeholder="Email"
-          required
-          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          readOnly
+          className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors bg-gray-100"
         />
         <input
-          id="taskTitle"
+          name="taskTitle"
           type="text"
           value={formData.taskTitle}
           onChange={handleInputChange}
@@ -147,7 +154,7 @@ const PostTask = () => {
           className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
         />
         <textarea
-          id="description"
+          name="description"
           value={formData.description}
           onChange={handleInputChange}
           placeholder="Description"
@@ -174,7 +181,7 @@ const PostTask = () => {
           </div>
         </div>
         <input
-          id="deadline"
+          name="deadline"
           type="date"
           value={formData.deadline}
           onChange={handleInputChange}
@@ -182,7 +189,7 @@ const PostTask = () => {
           className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
         />
         <select
-          id="difficulty"
+          name="difficulty"
           value={formData.difficulty}
           onChange={handleInputChange}
           required
@@ -194,7 +201,7 @@ const PostTask = () => {
           <option>Advanced</option>
         </select>
         <input
-          id="expectedOutcome"
+          name="expectedOutcome"
           type="text"
           value={formData.expectedOutcome}
           onChange={handleInputChange}
@@ -217,14 +224,13 @@ const PostTask = () => {
               isPublishing || !user ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
-            {isPublishing ? "Publishing..." : "Publish"}
+            {isPublishing ? "Publishing..." : "Publish Task"}
           </button>
         </div>
       </form>
     </div>
   );
 
-  // Preview UI
   const PreviewView = (
     <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-2xl w-full mx-auto my-12 backdrop-blur-md bg-opacity-80">
       <h2 className="text-3xl font-bold mb-4 text-center">Task Preview</h2>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
-import { Link } from 'react-router-dom';
+import { getAuth, signOut } from 'firebase/auth';
+import { getFirestore, doc, getDoc, updateDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Profile = () => {
     const [user, setUser] = useState(null);
@@ -10,36 +10,40 @@ const Profile = () => {
     const [error, setError] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({});
+    const [tasks, setTasks] = useState([]);
+    const [applications, setApplications] = useState([]);
+    const navigate = useNavigate();
 
-    // This useEffect hook is responsible for fetching user data
     useEffect(() => {
         const auth = getAuth();
-        const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+        const db = getFirestore();
+
+        const unsubscribeAuth = auth.onAuthStateChanged(async (currentUser) => {
             if (currentUser) {
                 setUser(currentUser);
-                const db = getFirestore();
                 const userDocRef = doc(db, 'artifacts/skillbridge-app/public/data/users', currentUser.uid);
 
                 try {
                     const userDoc = await getDoc(userDocRef);
                     if (userDoc.exists()) {
                         setUserData(userDoc.data());
-                        setFormData(userDoc.data()); // Initialize form with current data
+                        setFormData(userDoc.data());
                     } else {
-                        // User document does not exist, create a new one
-                        await setDoc(userDocRef, {
+                        const newUser = {
                             uid: currentUser.uid,
+                            username: currentUser.displayName || 'user',
                             name: currentUser.displayName || 'User',
                             email: currentUser.email,
-                            role: 'student', // Default role
+                            role: 'student',
                             createdAt: new Date(),
-                        });
-                        setUserData({ uid: currentUser.uid, name: currentUser.displayName || 'User', email: currentUser.email, role: 'student', createdAt: new Date() });
-                        setFormData({ uid: currentUser.uid, name: currentUser.displayName || 'User', email: currentUser.email, role: 'student', createdAt: new Date() });
+                        };
+                        await setDoc(userDocRef, newUser);
+                        setUserData(newUser);
+                        setFormData(newUser);
                     }
                 } catch (err) {
                     console.error("Error fetching or creating user document:", err);
-                    setError("Failed to load user profile. Please try again.");
+                    setError("Failed to load user profile.");
                 } finally {
                     setLoading(false);
                 }
@@ -49,12 +53,44 @@ const Profile = () => {
                 setLoading(false);
             }
         });
-        return () => unsubscribe();
+
+        const tasksQuery = collection(db, 'artifacts/skillbridge-app/public/data/tasks');
+        const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
+            const tasksData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+            }));
+            setTasks(tasksData);
+        }, (err) => {
+            console.error("Error fetching tasks:", err);
+            setError("Failed to fetch tasks.");
+        });
+
+        const applicationsQuery = collection(db, 'artifacts/skillbridge-app/public/data/applications');
+        const unsubscribeApplications = onSnapshot(applicationsQuery, (snapshot) => {
+            const applicationsData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+            }));
+            setApplications(applicationsData);
+        }, (err) => {
+            console.error("Error fetching applications:", err);
+            setError("Failed to fetch applications.");
+        });
+
+        return () => {
+            unsubscribeAuth();
+            unsubscribeTasks();
+            unsubscribeApplications();
+        };
     }, []);
 
     const handleInputChange = (e) => {
-        const { id, value } = e.target;
-        setFormData((prevData) => ({ ...prevData, [id]: value }));
+        const { name, value } = e.target;
+        setFormData((prevData) => ({
+            ...prevData,
+            [name]: value,
+        }));
     };
 
     const handleUpdateProfile = async (e) => {
@@ -69,12 +105,25 @@ const Profile = () => {
 
         try {
             await updateDoc(userDocRef, formData);
-            setUserData(formData);
+            const updatedDoc = await getDoc(userDocRef);
+            if (updatedDoc.exists()) {
+                setUserData(updatedDoc.data());
+                setFormData(updatedDoc.data());
+            }
             setIsEditing(false);
             setError("Profile updated successfully!");
         } catch (err) {
             console.error("Error updating profile:", err);
-            setError("Failed to update profile. Please try again.");
+            setError("Failed to update profile.");
+        }
+    };
+
+    const handleLogout = async () => {
+        const auth = getAuth();
+        try {
+            await signOut(auth);
+        } catch (err) {
+            console.error("Logout failed:", err);
         }
     };
 
@@ -90,10 +139,6 @@ const Profile = () => {
         );
     }
 
-    if (error && !isEditing) {
-        return <div className="text-center text-red-500 pt-24">{error}</div>;
-    }
-
     if (!user) {
         return (
             <div className="text-center text-gray-500 pt-24">
@@ -105,137 +150,164 @@ const Profile = () => {
 
     const ProfileHeader = () => (
         <div className="bg-white rounded-xl shadow-lg p-6 text-center">
-            <h1 className="text-3xl font-extrabold text-gray-900">{userData?.name || 'User'}</h1>
+            <h1 className="text-3xl font-extrabold text-gray-900">
+                Hi, {userData?.username || 'User'}
+            </h1>
             <p className="text-gray-600 mt-1">{userData?.email}</p>
             <p className="text-sm font-medium text-blue-500 mt-2 capitalize">
                 Role: {userData?.role}
             </p>
-            {!isEditing && (
-                <button
-                    onClick={() => setIsEditing(true)}
-                    className="mt-4 px-6 py-2 rounded-full text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-                >
-                    Edit Profile
-                </button>
-            )}
-        </div>
-    );
-    
-    const StudentDashboard = () => (
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Profile Information Section */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">Personal Information</h2>
-                {isEditing ? (
-                    <form onSubmit={handleUpdateProfile} className="space-y-4">
-                        <input
-                            id="education"
-                            type="text"
-                            value={formData.education || ''}
-                            onChange={handleInputChange}
-                            placeholder="Education (e.g., B.Tech in CSE)"
-                            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <input
-                            id="college"
-                            type="text"
-                            value={formData.college || ''}
-                            onChange={handleInputChange}
-                            placeholder="College Name"
-                            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <input
-                            id="city"
-                            type="text"
-                            value={formData.city || ''}
-                            onChange={handleInputChange}
-                            placeholder="City"
-                            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <input
-                            id="phoneNumber"
-                            type="tel"
-                            value={formData.phoneNumber || ''}
-                            onChange={handleInputChange}
-                            placeholder="Phone Number"
-                            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <div className="flex gap-4 mt-4">
-                            <button
-                                type="submit"
-                                className="w-full py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700"
-                            >
-                                Save Changes
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setIsEditing(false)}
-                                className="w-full py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-lg hover:bg-gray-400"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-                ) : (
-                    <div className="space-y-2 text-gray-700">
-                        <p><strong>Education:</strong> {userData?.education || <span className="text-gray-400">Not provided</span>}</p>
-                        <p><strong>College:</strong> {userData?.college || <span className="text-gray-400">Not provided</span>}</p>
-                        <p><strong>City:</strong> {userData?.city || <span className="text-gray-400">Not provided</span>}</p>
-                        <p><strong>Phone Number:</strong> {userData?.phoneNumber || <span className="text-gray-400">Not provided</span>}</p>
-                        {!userData?.education && <p className="text-red-500 text-sm mt-4">Please update your profile information.</p>}
-                    </div>
+            <div className="mt-4 flex justify-center gap-4">
+                {!isEditing && (
+                    <button
+                        onClick={() => setIsEditing(true)}
+                        className="px-6 py-2 rounded-full text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                    >
+                        Edit Profile
+                    </button>
                 )}
+                <button
+                    onClick={handleLogout}
+                    className="px-6 py-2 rounded-full text-white bg-red-600 hover:bg-red-700 transition-colors"
+                >
+                    Logout
+                </button>
             </div>
+        </div>
+    );
 
-            {/* Task Stats Section */}
-            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col justify-between">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Task Progress</h2>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-green-100 p-4 rounded-lg text-center">
-                        <h3 className="text-3xl font-bold text-green-700">0</h3>
-                        <p className="text-green-600">Completed Tasks</p>
-                    </div>
-                    <div className="bg-yellow-100 p-4 rounded-lg text-center">
-                        <h3 className="text-3xl font-bold text-yellow-700">0</h3>
-                        <p className="text-yellow-600">In Progress</p>
-                    </div>
+    const StudentDashboard = () => {
+        const studentApplications = applications.filter(app => app.applicantId === user.uid);
+        const appliedTasks = tasks.filter(task => studentApplications.some(app => app.taskId === task.id));
+        const completedTasksCount = studentApplications.filter(app => app.status === 'completed').length;
+        const inProgressTasksCount = studentApplications.filter(app => app.status === 'in-progress').length;
+
+        return (
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Profile Information Section */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">Personal Information</h2>
+                    {isEditing ? (
+                        <form onSubmit={handleUpdateProfile} className="space-y-4">
+                            <input name="username" type="text" value={formData.username || ''} onChange={handleInputChange} placeholder="Username" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            <input name="education" type="text" value={formData.education || ''} onChange={handleInputChange} placeholder="Education" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            <input name="college" type="text" value={formData.college || ''} onChange={handleInputChange} placeholder="College" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            <input name="city" type="text" value={formData.city || ''} onChange={handleInputChange} placeholder="City" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            <input name="phoneNumber" type="tel" value={formData.phoneNumber || ''} onChange={handleInputChange} placeholder="Phone Number" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            <div className="flex gap-4 mt-4">
+                                <button type="submit" className="w-full py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">Save</button>
+                                <button type="button" onClick={() => setIsEditing(false)} className="w-full py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-lg hover:bg-gray-400">Cancel</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="space-y-2 text-gray-700">
+                            <p><strong>Username:</strong> {userData?.username || 'Not provided'}</p>
+                            <p><strong>Education:</strong> {userData?.education || 'Not provided'}</p>
+                            <p><strong>College:</strong> {userData?.college || 'Not provided'}</p>
+                            <p><strong>City:</strong> {userData?.city || 'Not provided'}</p>
+                            <p><strong>Phone:</strong> {userData?.phoneNumber || 'Not provided'}</p>
+                            {(!userData?.education || !userData?.college || !userData?.city || !userData?.phoneNumber) && (
+                                <p className="text-red-500 text-sm mt-4">Please update your profile information.</p>
+                            )}
+                        </div>
+                    )}
                 </div>
-                <div className="mt-6">
-                    <h3 className="text-xl font-bold text-gray-800 mb-2">Application History</h3>
-                    <div className="text-gray-500 italic">No applications found.</div>
+
+                {/* Task Stats Section */}
+                <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col justify-between">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Task Progress</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-green-100 p-4 rounded-lg text-center">
+                            <h3 className="text-3xl font-bold text-green-700">{completedTasksCount}</h3>
+                            <p className="text-green-600">Completed Tasks</p>
+                        </div>
+                        <div className="bg-yellow-100 p-4 rounded-lg text-center">
+                            <h3 className="text-3xl font-bold text-yellow-700">{inProgressTasksCount}</h3>
+                            <p className="text-yellow-600">In Progress</p>
+                        </div>
+                    </div>
+                    <div className="mt-6">
+                        <h3 className="text-xl font-bold text-gray-800 mb-2">Application History</h3>
+                        {appliedTasks.length > 0 ? (
+                            <div className="space-y-2">
+                                {appliedTasks.map(task => (
+                                    <div key={task.id} className="bg-gray-100 p-3 rounded-lg flex justify-between items-center">
+                                        <p className="font-semibold">{task.taskTitle}</p>
+                                        <span className="text-sm text-gray-600">Status: {studentApplications.find(app => app.taskId === task.id)?.status || 'Pending'}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-gray-500 italic">No applications found.</div>
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
-    );
-    
-    const RecruiterDashboard = () => (
-        <div className="mt-8">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Posted Tasks</h2>
-                <div className="space-y-4">
-                    <div className="bg-gray-100 p-4 rounded-lg flex justify-between items-center">
-                        <div>
-                            <h3 className="font-semibold">Task Title: Build a React Dashboard</h3>
-                            <p className="text-sm text-gray-500">Posted on: 2023-10-27</p>
+        );
+    };
+
+    const RecruiterDashboard = () => {
+        const recruiterTasks = tasks.filter(task => task.postedByUserId === user.uid);
+
+        return (
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Profile Information Section for Recruiter */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">Personal Information</h2>
+                    {isEditing ? (
+                        <form onSubmit={handleUpdateProfile} className="space-y-4">
+                            <input name="username" type="text" value={formData.username || ''} onChange={handleInputChange} placeholder="Username" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            <input name="company" type="text" value={formData.company || ''} onChange={handleInputChange} placeholder="Company Name" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            <input name="position" type="text" value={formData.position || ''} onChange={handleInputChange} placeholder="Your Position" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            <input name="phoneNumber" type="tel" value={formData.phoneNumber || ''} onChange={handleInputChange} placeholder="Phone Number" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />
+                            <div className="flex gap-4 mt-4">
+                                <button type="submit" className="w-full py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">Save</button>
+                                <button type="button" onClick={() => setIsEditing(false)} className="w-full py-2 px-4 bg-gray-300 text-gray-800 font-semibold rounded-lg hover:bg-gray-400">Cancel</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="space-y-2 text-gray-700">
+                            <p><strong>Username:</strong> {userData?.username || 'Not provided'}</p>
+                            <p><strong>Company:</strong> {userData?.company || 'Not provided'}</p>
+                            <p><strong>Position:</strong> {userData?.position || 'Not provided'}</p>
+                            <p><strong>Phone:</strong> {userData?.phoneNumber || 'Not provided'}</p>
+                            {(!userData?.company || !userData?.position || !userData?.phoneNumber) && (
+                                <p className="text-red-500 text-sm mt-4">Please update your profile information.</p>
+                            )}
                         </div>
-                        <span className="bg-yellow-200 text-yellow-800 text-xs font-semibold px-3 py-1 rounded-full">In Progress</span>
+                    )}
+                </div>
+                {/* Posted Tasks Section for Recruiter */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Posted Tasks</h2>
+                    <div className="space-y-4">
+                        {recruiterTasks.length > 0 ? (
+                            recruiterTasks.map(task => (
+                                <div key={task.id} className="bg-gray-100 p-4 rounded-lg flex justify-between items-center">
+                                    <div>
+                                        <h3 className="font-semibold">Task Title: {task.taskTitle}</h3>
+                                        <p className="text-sm text-gray-500">Posted on: {new Date(task.timestamp).toLocaleDateString()}</p>
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        <span className="bg-yellow-200 text-yellow-800 text-xs font-semibold px-3 py-1 rounded-full">
+                                            {applications.filter(app => app.taskId === task.id).length} Applicants
+                                        </span>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-gray-500 italic">No tasks found.</div>
+                        )}
                     </div>
-                    <div className="bg-gray-100 p-4 rounded-lg flex justify-between items-center">
-                        <div>
-                            <h3 className="font-semibold">Task Title: Design a landing page</h3>
-                            <p className="text-sm text-gray-500">Posted on: 2023-10-20</p>
-                        </div>
-                        <span className="bg-green-200 text-green-800 text-xs font-semibold px-3 py-1 rounded-full">Completed</span>
-                    </div>
-                    <div className="text-gray-500 italic mt-4">No tasks found.</div>
                 </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8 pt-24">
             <div className="max-w-4xl mx-auto">
+                {error && <div className="p-4 mb-4 text-center text-red-700 bg-red-100 rounded-lg">{error}</div>}
                 <ProfileHeader />
                 {userData?.role === 'recruiter' ? <RecruiterDashboard /> : <StudentDashboard />}
             </div>

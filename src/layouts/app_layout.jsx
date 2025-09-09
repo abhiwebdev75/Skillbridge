@@ -1,16 +1,16 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Outlet } from "react-router-dom";
-import * as THREE from "three";
-import HALO from "vanta/dist/vanta.halo.min"; // ✅ Correct HALO import
-import Header from "../components/header";
-import Footer from "../components/footer";
+import React from 'react';
+import { Outlet } from 'react-router-dom';
+import Header from '../components/header';
+import Footer from '../components/footer';
 import Chatbot from "../components/chatbot";
+import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
+import HALO from "vanta/dist/vanta.halo.min";
 
-const AppLayout = () => {
+const AppLayout = ({ userRole }) => {
   const vantaRef = useRef(null);
   const vantaEffect = useRef(null);
 
-  // ✅ Chatbot state
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
@@ -23,12 +23,8 @@ const AppLayout = () => {
         gyroControls: false,
         minHeight: 200.0,
         minWidth: 200.0,
-
-        // 🎨 Colors
-        backgroundColor: 0x0a0f1c, // dark navy
+        backgroundColor: 0x0a0f1c,
         baseColor: 0x5a189a,
-
-        // 🔥 Motion / glow tuning
         size: 0.6,
         amplitudeFactor: 1.2,
       });
@@ -44,26 +40,22 @@ const AppLayout = () => {
 
   return (
     <div className="relative min-h-screen flex flex-col font-inter">
-      {/* Vanta.js HALO background */}
       <div
         ref={vantaRef}
         className="fixed inset-0 w-full h-full"
         style={{ zIndex: 0 }}
       />
 
-      {/* Page Content above Vanta */}
       <div className="relative z-10 flex flex-col min-h-screen">
-        <Header />
+        <Header userRole={userRole} />
         <main className="flex-grow">
           <Outlet />
         </main>
         <Footer />
       </div>
 
-      {/* ✅ Chatbot */}
       <Chatbot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
 
-      {/* ✅ Chatbot Button (shows only if closed) */}
       {!isChatOpen && (
         <button
           onClick={() => setIsChatOpen(true)}
