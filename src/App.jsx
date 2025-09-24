@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { initializeApp } from "firebase/app";
@@ -19,6 +19,8 @@ import Messages from './pages/Messages';
 import { Button } from '@/components/ui/button';
 import { cn } from './lib/utils';
 import './index.css';
+
+export const UserContext = createContext(null);
 
 const firebaseConfig = {
   apiKey: "AIzaSyAAa1lNKQPgt6f0dd6TZ4VtgOiLYb7ukzE",
@@ -173,7 +175,9 @@ const App = () => {
 
   return (
     <div>
+      <UserContext.Provider value={user}>
       <RouterProvider router={router} />
+      </UserContext.Provider>
     </div>
   );
 };
