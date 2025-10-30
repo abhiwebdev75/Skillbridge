@@ -54,7 +54,7 @@ const LandingPage = () => {
   
   return (
     <div className="relative min-h-screen flex flex-col font-inter">
-      <Content />
+      <Content currentUser={user}/>
       <LoginMessage />
       <TrustedBySection />
       {user ? (
@@ -70,7 +70,7 @@ const LandingPage = () => {
 
 
 // Main content with hero text and animated card.
-const Content = () => (
+const Content = ({currentUser}) => (
   <main className="container mx-auto px-4 mt-24 py-16 flex flex-col lg:flex-row items-center lg:items-start space-y-12 lg:space-y-0 lg:space-x-12 relative z-10" style={{ height: "100vh" }}>
     {/* Left column - Hero text and buttons */}
     <div className="lg:w-1/2 mx-auto flex flex-col items-center lg:items-start text-center lg:text-left text-white">
@@ -92,11 +92,13 @@ const Content = () => (
             <span className="ml-2">&rarr;</span>
           </button>
         </Link>
-        <Link to="/post-task">
-          <button className="px-8 py-3 rounded-full text-gray-700 font-semibold border-2 border-gray-300 transition-colors duration-300 hover:bg-gray-100">
-            Post a Task
-          </button>
-        </Link>
+        {currentUser !== 'student' && (
+                    <Link to="/post-task">
+                        <button className="px-8 py-3 rounded-full text-gray-700 font-semibold border-2 border-gray-300 transition-colors duration-300 hover:bg-gray-100">
+                            Post a Task
+                        </button>
+                    </Link>
+                )}
       </div>
     </div>
 
