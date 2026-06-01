@@ -34,58 +34,90 @@ const Chatbot = ({ isOpen, onClose }) => {
         const userText = input.trim();
         if (!userText && !file) return;
 
-        // Add the user's message to the chat
-        let messageText = userText;
+        // Reset input immediately after capturing text/file name
+        setInput('');
+
+        // 1. Handle File Upload (Current Placeholder)
         if (file) {
-            messageText = `Uploaded file: ${file.name}`;
-            setMessages(prevMessages => [...prevMessages, { text: messageText, sender: 'user' }]);
-            // For now, we will simply confirm the file upload
-            setMessages(prevMessages => [...prevMessages, { text: `Thank you for uploading ${file.name}! I can analyze your resume once you have a backend endpoint to handle it.`, sender: 'bot' }]);
+            const fileName = file.name;
+            setMessages(prevMessages => [...prevMessages, { text: `Uploaded file: ${fileName}`, sender: 'user' }]);
+            
+            // NOTE: To fully enable resume analysis, you would need to convert 'file' 
+            // to a base64 string and include it in the 'parts' array of the payload 
+            // for the multi-modal Gemini API. For this exercise, we keep the placeholder.
+            setMessages(prevMessages => [...prevMessages, { text: `Thank you for uploading ${fileName}! File-based analysis requires a proper backend setup to convert the file to base64 and send it to a multi-modal endpoint. For now, try asking me a text question about careers or skills!`, sender: 'bot' }]);
             setFile(null); // Clear the file state
-        } else {
+            return;
+        }
+
+        // 2. Handle Text Message
+        if (userText) {
             setMessages(prevMessages => [...prevMessages, { text: userText, sender: 'user' }]);
             setIsLoading(true);
 
             // This is where you call the Gemini API.
-            // For security, you should create a backend endpoint (e.g., in Express.js)
-            // to proxy this request, so your API key is not exposed in the client-side code.
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            // WARNING: In a production app, you MUST proxy this request through a backend 
+            // (e.g., Express.js) to hide your API key.
 
-            // Payload for the Gemini API request
-            const payload = {
-                contents: [{ parts: [{ text: userText }] }],
-                tools: [{ "google_search": {} }],
-                systemInstruction: {
-                    parts: [{ text: systemPrompt }]
-                },
+            // ⚠️ IMPORTANT: Updated model to gemini-2.5-flash-preview-09-2025
+            const apiKey = "AIzaSyBR5tpbq7r5UJLcDlN30VHrwVF9Fmk3l7g"; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            // --- API Call Implementation ---
+
+            // Exponential Backoff implementation (necessary for production usage)
+            const MAX_RETRIES = 3;
+            let currentRetry = 0;
+
+            const runApiCall = async () => {
+                const payload = {
+                    contents: [{ parts: [{ text: userText }] }],
+                    // Enable Google Search grounding for up-to-date career advice
+                    tools: [{ "google_search": {} }],
+                    // Use the defined system prompt for persona guidance
+                    systemInstruction: {
+                        parts: [{ text: systemPrompt }]
+                    },
+                };
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.status === 429 && currentRetry < MAX_RETRIES) {
+                        // Rate limit error, retry with exponential backoff
+                        const delay = Math.pow(2, currentRetry) * 1000;
+                        currentRetry++;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        return runApiCall(); // Retry the call
+                    }
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('API call failed:', errorData);
+                        throw new Error(`API call failed with status ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const botMessage = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                    if (botMessage) {
+                        setMessages(prevMessages => [...prevMessages, { text: botMessage, sender: 'bot' }]);
+                    } else {
+                        throw new Error("Received an empty response from the model.");
+                    }
+                } catch (error) {
+                    console.error('Error fetching from Gemini API:', error);
+                    setMessages(prevMessages => [...prevMessages, { text: "Sorry, I'm having trouble connecting right now or the API call failed. Please check the console for details.", sender: 'bot' }]);
+                } finally {
+                    setIsLoading(false);
+                }
             };
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    console.error('API call failed:', errorData);
-                    throw new Error(`API call failed with status ${response.status}`);
-                }
-
-                const result = await response.json();
-                const botMessage = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-                if (botMessage) {
-                    setMessages(prevMessages => [...prevMessages, { text: botMessage, sender: 'bot' }]);
-                }
-            } catch (error) {
-                console.error('Error fetching from Gemini API:', error);
-                setMessages(prevMessages => [...prevMessages, { text: "Sorry, I'm having trouble connecting right now. Please try again in a moment.", sender: 'bot' }]);
-            } finally {
-                setIsLoading(false);
-            }
+            
+            runApiCall();
         }
     };
 
@@ -93,14 +125,15 @@ const Chatbot = ({ isOpen, onClose }) => {
     const handleFileChange = (e) => {
         const selectedFile = e.target.files[0];
         if (selectedFile) {
+            // Only set file state; sending is triggered by handleSendMessage
             setFile(selectedFile);
-            setInput(selectedFile.name);
+            setInput(`Ready to send: ${selectedFile.name}`);
         }
     };
 
     // Handle key press for sending messages with Enter key
     const handleKeyPress = (e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && (input.trim() || file)) {
             handleSendMessage();
         }
     };
@@ -111,12 +144,14 @@ const Chatbot = ({ isOpen, onClose }) => {
     }
 
     return (
-        <div className="fixed inset-0 flex items-end justify-end p-4 z-50">
-            {/* Background overlay with a blur effect */}
-            {/* Updated the background to be a lighter color with more transparency and a stronger blur. */}
-            <div className="absolute inset-0 bg-gray-100 bg-opacity-10 backdrop-blur-lg z-40"></div>
+        <div className="fixed inset-0 flex items-end justify-end p-4 z-50 pointer-events-none">
+            {/* Background overlay with a blur effect - MODIFIED FOR VISIBILITY AND STABILITY */}
+            {/* Increased opacity (bg-opacity-70) for a clearer visual separation/dimming effect 
+                while keeping a safe blur level (backdrop-blur-lg) */}
+            <div className="absolute inset-0 bg-gray-900 bg-opacity-70 backdrop-blur-lg z-40 pointer-events-auto"></div>
             
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm h-4/5 flex flex-col z-50">
+            {/* Chat Window Container */}
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm h-4/5 flex flex-col z-50 pointer-events-auto">
                 <div className="p-4 bg-blue-600 text-white rounded-t-2xl flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                         <div className="relative">
@@ -140,47 +175,54 @@ const Chatbot = ({ isOpen, onClose }) => {
                     {messages.map((message, index) => (
                         <div
                             key={index}
-                            className={`message max-w-sm p-3 rounded-2xl mb-2 shadow-sm ${
+                            className={`message max-w-[80%] p-3 rounded-2xl mb-2 shadow-md text-sm ${
                                 message.sender === 'user'
-                                    ? 'bg-blue-600 text-white self-end rounded-br-md'
-                                    : 'bg-gray-200 text-gray-800 self-start rounded-bl-md'
+                                    ? 'bg-blue-600 text-white self-end rounded-br-lg'
+                                    : 'bg-gray-200 text-gray-800 self-start rounded-bl-lg'
                             }`}
                         >
                             {message.text}
                         </div>
                     ))}
                     {isLoading && (
-                        <div className="message bot-message self-start text-sm italic text-gray-500">
-                            SkillBridge is thinking...
+                        <div className="message bot-message self-start text-sm italic text-gray-500 p-3">
+                            <div className="flex items-center space-x-2">
+                                <svg className="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>SkillBridge is thinking...</span>
+                            </div>
                         </div>
                     )}
                     <div ref={messagesEndRef} />
                 </div>
 
-                <div className="p-4 flex items-center bg-gray-50 rounded-b-2xl">
-                    <label htmlFor="file-upload" className="cursor-pointer ml-2 p-3 bg-gray-300 text-gray-700 rounded-full hover:bg-gray-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
+                <div className="p-4 flex items-center bg-gray-50 rounded-b-2xl border-t border-gray-200">
+                    <label htmlFor="file-upload" title="Upload File (Placeholder)" className="cursor-pointer ml-2 p-3 bg-gray-300 text-gray-700 rounded-full hover:bg-gray-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
                             <path fillRule="evenodd" d="M11.47 2.47a.75.75 0 011.06 0l4.5 4.5a.75.75 0 01-1.06 1.06L12 4.06V17.25a.75.75 0 01-1.5 0V4.06L7.03 8.03a.75.75 0 01-1.06-1.06l4.5-4.5z" clipRule="evenodd" />
                             <path fillRule="evenodd" d="M3 15.75a.75.75 0 01.75.75v2.25a1.5 1.5 0 001.5 1.5h13.5a1.5 1.5 0 001.5-1.5V16.5a.75.75 0 011.5 0v2.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V16.5a.75.75 0 01.75-.75z" clipRule="evenodd" />
                         </svg>
                     </label>
-                    <input id="file-upload" type="file" onChange={handleFileChange} className="hidden" />
+                    <input id="file-upload" type="file" onChange={handleFileChange} className="hidden" accept=".pdf,.doc,.docx" />
 
                     <input
                         type="text"
                         id="user-input"
-                        placeholder="Type your message..."
+                        placeholder={file ? `File ready: ${file.name}` : "Type your message..."}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        className="flex-1 px-4 py-2 mx-4 bg-white border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        className="flex-1 px-4 py-2 mx-4 bg-white border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-100"
+                        disabled={isLoading}
                     />
 
                     <button
                         id="send-button"
                         onClick={handleSendMessage}
-                        className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        disabled={isLoading}
+                        className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={isLoading || (!input.trim() && !file)}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
                             <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.917a.75.75 0 00.926.94L18.777 9.4l-7.917 2.432a.75.75 0 00-.94.926l2.432 7.917a.75.75 0 00.926.94l2.432-7.917a.75.75 0 00.94-.926L21.777 2.405a.75.75 0 00-.926-.94l-18.35 1.545z" />

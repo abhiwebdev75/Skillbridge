@@ -126,6 +126,35 @@ const Explore = ({ userRole }) => {
       setError("Failed to update applicant status.");
     }
   };
+  // Fix: Always use setDoc for chat creation, and check for chat existence before navigation
+  const handleMessageApplicant = async (applicantId) => {
+  if (!user) return;
+
+  const db = getFirestore();
+  const chatsRef = collection(db, 'artifacts/skillbridge-app/public/data/chats');
+  const chatId = [user.uid, applicantId].sort().join('_'); // ensures unique order
+  const chatDocRef = doc(chatsRef, chatId);
+
+  try {
+    const chatSnap = await getDoc(chatDocRef);
+    if (!chatSnap.exists()) {
+      // ✅ create chat doc without inline messages
+      await setDoc(chatDocRef, {
+        participants: [user.uid, applicantId],
+        createdAt: new Date(),
+      });
+    }
+
+    // Navigate to chat screen
+    setTimeout(() => {
+      navigate(`/messages?chatId=${chatId}`);
+    }, 500);
+
+  } catch (err) {
+    console.error("Error creating/opening chat:", err);
+    setError("Failed to start chat.");
+  }
+};
 
   const handleViewProfile = async (applicantId) => {
     const db = getFirestore();
@@ -165,30 +194,7 @@ const Explore = ({ userRole }) => {
     }
   };
 
-  const handleMessageApplicant = async (applicantId) => {
-    if (!user) return;
-
-    const db = getFirestore();
-    const chatsRef = collection(db, 'artifacts/skillbridge-app/public/data/chats');
-
-    // Create unique chatId by sorting UIDs
-    const chatId = [user.uid, applicantId].sort().join('_');
-    const chatDocRef = doc(chatsRef, chatId);
-
-    try {
-      const chatSnap = await getDoc(chatDocRef);
-      if (!chatSnap.exists()) {
-        await setDoc(chatDocRef, {
-          participants: [user.uid, applicantId],
-          createdAt: new Date()
-        });
-      }
-      navigate(`/messages?chatId=${chatId}`);
-    } catch (err) {
-      console.error("Error creating/opening chat:", err);
-      setError("Failed to start chat.");
-    }
-  };
+  // (Removed duplicate handleMessageApplicant function)
 
   // Student Dashboard
   const StudentDashboard = () => {

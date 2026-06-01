@@ -134,43 +134,34 @@ const Messages = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !user || !selectedChat) return;
-    
-    let currentChatId = selectedChat.id;
-    const chatDocRef = doc(db, 'artifacts/skillbridge-app/public/data/chats', currentChatId);
+ const handleSendMessage = async () => {
+  if (!newMessage.trim() || !user) return;
 
-    try {
-      // Check if chat doc exists, create it if it doesn't
-      const chatSnap = await getDoc(chatDocRef);
-      if (!chatSnap.exists()) {
-        await setDoc(chatDocRef, {
-          participants: [user.uid, selectedChat.recipient.uid],
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      }
+  try {
+    const db = getFirestore();
+    const chatDocRef = doc(db, 'artifacts/skillbridge-app/public/data/chats', selectedChat.id);
 
-      const messagesCollectionRef = collection(chatDocRef, 'messages');
-      await addDoc(messagesCollectionRef, {
-        senderId: user.uid,
-        senderName: user.displayName || 'user',
-        text: newMessage,
-        createdAt: serverTimestamp(),
-      });
-      
-      // Update the parent chat document's updatedAt field
-      await updateDoc(chatDocRef, {
-        updatedAt: serverTimestamp(),
-      });
-      
-      setNewMessage('');
-    } catch (err) {
-      console.error("Error sending message:", err);
-      setError("Failed to send message.");
-    }
-  };
+    // ✅ messages go in a subcollection
+    const messagesCollectionRef = collection(chatDocRef, 'messages');
+
+    await addDoc(messagesCollectionRef, {
+      text: newMessage,
+      senderId: user.uid,
+      createdAt: new Date(),
+    });
+
+    // update chat last-updated time
+    await updateDoc(chatDocRef, {
+      updatedAt: new Date(),
+    });
+
+    setNewMessage("");
+  } catch (err) {
+    console.error("Error sending message:", err);
+    setError("Failed to send message.");
+  }
+};
+
 
   if (loading) {
     return (
@@ -208,16 +199,13 @@ const Messages = () => {
             <div className="w-1/4 bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Messages</h2>
                 <ul className="space-y-2">
-                    {chats.length > 0 ? (
-                        chats.map(chat => (
-                            <li
-                                key={chat.id}
-                                onClick={() => setSelectedChat(chat)}
-                                className={`cursor-pointer p-3 rounded-lg transition-colors ${selectedChat?.id === chat.id ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-200'}`}
-                            >
-                                <h3 className="font-semibold">{chat.recipient && chat.recipient.username ? chat.recipient.username : 'Unknown User'}</h3>
-                            </li>
-                        ))
+                    {selectedChat ? (
+                        <li
+                            key={selectedChat.id}
+                            className="cursor-pointer p-3 rounded-lg bg-blue-100 text-blue-800"
+                        >
+                            <h3 className="font-semibold">{selectedChat.recipient && selectedChat.recipient.username ? selectedChat.recipient.username : 'Unknown User'}</h3>
+                        </li>
                     ) : (
                         <li className="text-gray-500 italic">No conversations yet.</li>
                     )}

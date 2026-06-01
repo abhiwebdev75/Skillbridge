@@ -1,3 +1,5 @@
+import { initializeApp } from "firebase/app";
+
 const firebaseConfig = {
   apiKey: "AIzaSyAh_hb5DxFd3buHf73QyyOlVmfwvMrfkaE",
   authDomain: "skillbridge-7891b.firebaseapp.com",

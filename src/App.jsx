@@ -6,9 +6,6 @@ import { getFirestore, doc, getDoc } from "firebase/firestore";
 
 import AppLayout from './layouts/app_layout';
 import LandingPage from './pages/landingPage';
-import OnboardingPage from './pages/OnboardingPage';
-import JobListing from './pages/job-listing';
-import MyJobs from './pages/myjobs';
 import Explore from './pages/explore';
 import PostTask from './pages/posttask';
 import Signup from './pages/signup';
@@ -112,18 +109,6 @@ const App = () => {
         {
           path: '/',
           element: <LandingPage />
-        },
-        {
-          path: '/onboarding',
-          element: <OnboardingPage />
-        },
-        {
-          path: '/job-listing',
-          element: <JobListing />
-        },
-        {
-          path: '/my-jobs',
-          element: <MyJobs />
         },
         {
           path: '/explore',
