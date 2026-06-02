@@ -47,8 +47,8 @@ const Explore = ({ userRole }) => {
     }
 
     const db = getFirestore();
-    const tasksCollectionRef = collection(db, 'artifacts/skillbridge-app/public/data/tasks');
-    const applicationsCollectionRef = collection(db, 'artifacts/skillbridge-app/public/data/applications');
+    const tasksCollectionRef = collection(db, 'tasks');
+    const applicationsCollectionRef = collection(db, 'applications');
 
     let tasksQuery;
     if (userRole === 'recruiter') {
@@ -115,7 +115,7 @@ const Explore = ({ userRole }) => {
 
   const handleAcceptReject = async (applicationId, status) => {
     const db = getFirestore();
-    const appDocRef = doc(db, 'artifacts/skillbridge-app/public/data/applications', applicationId);
+    const appDocRef = doc(db, 'applications', applicationId);
     try {
       await updateDoc(appDocRef, { status });
       setApplicants(prevApplicants =>
@@ -131,7 +131,7 @@ const Explore = ({ userRole }) => {
   if (!user) return;
 
   const db = getFirestore();
-  const chatsRef = collection(db, 'artifacts/skillbridge-app/public/data/chats');
+  const chatsRef = collection(db, 'chats');
   const chatId = [user.uid, applicantId].sort().join('_'); // ensures unique order
   const chatDocRef = doc(chatsRef, chatId);
 
@@ -158,7 +158,7 @@ const Explore = ({ userRole }) => {
 
   const handleViewProfile = async (applicantId) => {
     const db = getFirestore();
-    const userDocRef = doc(db, 'artifacts/skillbridge-app/public/data/users', applicantId);
+    const userDocRef = doc(db, 'users', applicantId);
     try {
       const userDoc = await getDoc(userDocRef);
       if (userDoc.exists()) {
@@ -177,7 +177,7 @@ const Explore = ({ userRole }) => {
     }
 
     const db = getFirestore();
-    const applicationsCollectionRef = collection(db, 'artifacts/skillbridge-app/public/data/applications');
+    const applicationsCollectionRef = collection(db, 'applications');
 
     try {
       await addDoc(applicationsCollectionRef, {

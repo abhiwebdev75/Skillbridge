@@ -198,8 +198,8 @@ const StatsSection = () => {
     const fetchStats = async () => {
       try {
         const db = getFirestore();
-        const usersCollection = collection(db, 'artifacts/skillbridge-app/public/data/users');
-        const tasksCollection = collection(db, 'artifacts/skillbridge-app/public/data/tasks');
+        const usersCollection = collection(db, 'users');
+        const tasksCollection = collection(db, 'tasks');
 
         const usersSnapshot = await getDocs(usersCollection);
         const tasksSnapshot = await getDocs(tasksCollection);

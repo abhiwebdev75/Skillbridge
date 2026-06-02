@@ -3,20 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getAuth, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, updateProfile } from "firebase/auth";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
+import app from '../firebase';
 
-// Your Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAAa1lNKQPgt6f0dd6TZ4VtgOiLYb7ukzE",
-  authDomain: "skillbridge-81d5e.firebaseapp.com",
-  projectId: "skillbridge-81d5e",
-  storageBucket: "skillbridge-81d5e.firebasestorage.app",
-  messagingSenderId: "854363859288",
-  appId: "1:854363859288:web:c04fb725eebb0b52f35d2d",
-  measurementId: "G-E78EQCCY5R"
-};
 
-// Initialize Firebase app and authentication
-const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -38,7 +27,7 @@ const Signup = () => {
   // Function to save user data to Firestore
   const saveUserToFirestore = async (user, userRole, userName) => {
     try {
-      await setDoc(doc(db, "artifacts/skillbridge-app/public/data/users", user.uid), {
+      await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         name: userName,
         email: user.email,

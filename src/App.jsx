@@ -16,20 +16,11 @@ import Messages from './pages/Messages';
 import { Button } from '@/components/ui/button';
 import { cn } from './lib/utils';
 import './index.css';
+import app from './firebase';
+
 
 export const UserContext = createContext(null);
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAAa1lNKQPgt6f0dd6TZ4VtgOiLYb7ukzE",
-  authDomain: "skillbridge-81d5e.firebaseapp.com",
-  projectId: "skillbridge-81d5e",
-  storageBucket: "skillbridge-81d5e.firebasestorage.app",
-  messagingSenderId: "854363859288",
-  appId: "1:854363859288:web:c04fb725eebb0b52f35d2d",
-  measurementId: "G-E78EQCCY5R"
-};
-
-const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -69,7 +60,7 @@ const App = () => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        const userDocRef = doc(db, 'artifacts/skillbridge-app/public/data/users', currentUser.uid);
+        const userDocRef = doc(db, 'users', currentUser.uid);
         try {
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {

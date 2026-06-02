@@ -35,7 +35,7 @@ const Messages = () => {
       return;
     }
 
-    const chatsCollectionRef = collection(db, 'artifacts/skillbridge-app/public/data/chats');
+    const chatsCollectionRef = collection(db, 'chats');
     const chatsQuery = query(chatsCollectionRef, where('participants', 'array-contains', user.uid));
 
     const unsubscribeChats = onSnapshot(chatsQuery, async (snapshot) => {
@@ -45,7 +45,7 @@ const Messages = () => {
           console.warn(`Chat ${chatDoc.id} is missing a recipient (participants: ${JSON.stringify(chatDoc.data().participants)})`);
           return null;
         }
-        const userDocRef = doc(db, 'artifacts/skillbridge-app/public/data/users', recipientId);
+        const userDocRef = doc(db, 'users', recipientId);
         const userDoc = await getDoc(userDocRef);
         const recipient = userDoc.exists() ? userDoc.data() : { uid: recipientId, username: 'Unknown User' };
         return { id: chatDoc.id, ...chatDoc.data(), recipient };
@@ -71,7 +71,7 @@ const Messages = () => {
     if (recipientId && user) {
         // Construct a unique and predictable chat ID
         const chatId = [user.uid, recipientId].sort().join('_');
-        const chatDocRef = doc(db, 'artifacts/skillbridge-app/public/data/chats', chatId);
+        const chatDocRef = doc(db, 'chats', chatId);
 
         // Check if the chat document exists
         getDoc(chatDocRef).then(chatSnap => {
@@ -87,7 +87,7 @@ const Messages = () => {
         }).then(chatDoc => {
             // Get the recipient's user data
             const recipientUid = chatDoc.data().participants.find(uid => uid !== user.uid);
-            const userDocRef = doc(db, 'artifacts/skillbridge-app/public/data/users', recipientUid);
+            const userDocRef = doc(db, 'users', recipientUid);
             return getDoc(userDocRef).then(userDoc => {
                 const recipientName = userDoc.exists() ? userDoc.data().username : 'Unknown User';
                 const newChat = {
@@ -112,7 +112,7 @@ const Messages = () => {
       setMessages([]);
       return;
     }
-    const messagesCollectionRef = collection(db, `artifacts/skillbridge-app/public/data/chats/${selectedChat.id}/messages`);
+    const messagesCollectionRef = collection(db, `chats/${selectedChat.id}/messages`);
     const messagesQuery = query(messagesCollectionRef, orderBy('createdAt'));
 
     const unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
@@ -139,7 +139,7 @@ const Messages = () => {
 
   try {
     const db = getFirestore();
-    const chatDocRef = doc(db, 'artifacts/skillbridge-app/public/data/chats', selectedChat.id);
+    const chatDocRef = doc(db, 'chats', selectedChat.id);
 
     // ✅ messages go in a subcollection
     const messagesCollectionRef = collection(chatDocRef, 'messages');

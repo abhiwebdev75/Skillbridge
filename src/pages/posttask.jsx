@@ -32,7 +32,7 @@ const PostTask = () => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       setUser(authUser);
       if (authUser) {
-        const userDocRef = doc(db, 'artifacts/skillbridge-app/public/data/users', authUser.uid);
+        const userDocRef = doc(db, 'users', authUser.uid);
         try {
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -87,7 +87,7 @@ const PostTask = () => {
 
     try {
       const db = getFirestore();
-      const tasksCollectionRef = collection(db, `artifacts/skillbridge-app/public/data/tasks`);
+      const tasksCollectionRef = collection(db, `tasks`);
       await addDoc(tasksCollectionRef, {
         ...formData,
         postedByUserId: user.uid,

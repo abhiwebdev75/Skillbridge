@@ -21,7 +21,7 @@ const Profile = () => {
         const unsubscribeAuth = auth.onAuthStateChanged(async (currentUser) => {
             if (currentUser) {
                 setUser(currentUser);
-                const userDocRef = doc(db, 'artifacts/skillbridge-app/public/data/users', currentUser.uid);
+                const userDocRef = doc(db, 'users', currentUser.uid);
 
                 try {
                     const userDoc = await getDoc(userDocRef);
@@ -54,7 +54,7 @@ const Profile = () => {
             }
         });
 
-        const tasksQuery = collection(db, 'artifacts/skillbridge-app/public/data/tasks');
+        const tasksQuery = collection(db, 'tasks');
         const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
             const tasksData = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -66,7 +66,7 @@ const Profile = () => {
             setError("Failed to fetch tasks.");
         });
 
-        const applicationsQuery = collection(db, 'artifacts/skillbridge-app/public/data/applications');
+        const applicationsQuery = collection(db, 'applications');
         const unsubscribeApplications = onSnapshot(applicationsQuery, (snapshot) => {
             const applicationsData = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -101,7 +101,7 @@ const Profile = () => {
         }
 
         const db = getFirestore();
-        const userDocRef = doc(db, 'artifacts/skillbridge-app/public/data/users', user.uid);
+        const userDocRef = doc(db, 'users', user.uid);
 
         try {
             await updateDoc(userDocRef, formData);
