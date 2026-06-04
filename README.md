@@ -1,17 +1,197 @@
-# React + Vite
+# 📋 SkillBridge Task Manager
 
-Currently, two official plugins are available:
+A full-stack task management application built using React, Node.js, Express, and MongoDB. The application allows users to create, view, update, and delete tasks through REST APIs with data stored in a MongoDB database.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## 🚀 Features
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-=======
-# Skillbridge
-due to api failure project is underprocess
-Minor Project 
+- ✅ Create new tasks
+- ✅ View all tasks
+- ✅ Update existing tasks
+- ✅ Delete tasks
+- ✅ RESTful API integration
+- ✅ MongoDB database storage
+- ✅ Responsive user interface
+- ✅ Real-time task management
 
-Planning started 18 7 25
->>>>>>> origin/abhiweb
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+- React.js
+- Axios
+- CSS / Tailwind CSS
+
+### Backend
+- Node.js
+- Express.js
+- MongoDB
+- Mongoose
+
+---
+
+## 📂 Project Structure
+
+```bash
+SkillBridge/
+│
+├── client/
+│   ├── public/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── App.js
+│   │   └── index.js
+│
+├── server/
+│   ├── models/
+│   ├── routes/
+│   ├── controllers/
+│   ├── config/
+│   ├── server.js
+│
+└── README.md
+```
+
+---
+
+## ⚙️ Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/skillbridge-task-manager.git
+cd skillbridge-task-manager
+```
+
+### 2. Backend Setup
+
+```bash
+cd server
+npm install
+```
+
+Create a `.env` file inside the server folder:
+
+```env
+PORT=5000
+MONGO_URI=your_mongodb_connection_string
+```
+
+Start the backend server:
+
+```bash
+npm start
+```
+
+or
+
+```bash
+npm run dev
+```
+
+---
+
+### 3. Frontend Setup
+
+```bash
+cd client
+npm install
+```
+
+Create a `.env` file:
+
+```env
+REACT_APP_API_URL=http://localhost:5000/api
+```
+
+Run the React application:
+
+```bash
+npm start
+```
+
+---
+
+## 📡 API Endpoints
+
+### Get All Tasks
+
+```http
+GET /api/tasks
+```
+
+### Create Task
+
+```http
+POST /api/tasks
+```
+
+Request Body:
+
+```json
+{
+  "title": "Complete React Project",
+  "description": "Build a task manager application"
+}
+```
+
+### Update Task
+
+```http
+PUT /api/tasks/:id
+```
+
+### Delete Task
+
+```http
+DELETE /api/tasks/:id
+```
+
+---
+
+## 🗄️ Database Schema
+
+```javascript
+{
+  title: String,
+  description: String,
+  completed: Boolean,
+  createdAt: Date
+}
+```
+
+---
+
+## 🎯 Future Improvements
+
+- User Authentication
+- Task Categories
+- Due Dates
+- Search and Filter Tasks
+- Notifications
+- Dashboard Analytics
+- Dark Mode
+
+---
+
+## 👨‍💻 Author
+
+**Abhinash**
+
+GitHub: Your GitHub Profile
+
+LinkedIn: Your LinkedIn Profile
+
+---
+
+## 📜 License
+
+This project is licensed under the MIT License.
+
+---
+
+⭐ If you like this project, consider giving it a star on GitHub!
