@@ -182,9 +182,9 @@ DELETE /api/tasks/:id
 
 **Abhinash**
 
-GitHub: Your GitHub Profile
+GitHub: https://github.com/abhiwebdev75
 
-LinkedIn: Your LinkedIn Profile
+LinkedIn: https://linkedin.com/in/abhinash22hp
 
 ---
 
